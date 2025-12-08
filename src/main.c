@@ -13,10 +13,10 @@
 #include "nrf24l01.h"
 #include "shared.h"
 
-#define MOTOR_FL LED_PIN_RIGHT
-#define MOTOR_FR LED_PIN_DOWN
-#define MOTOR_RL LED_PIN_UP
-#define MOTOR_RR LED_PIN_LEFT
+#define MOTOR_FL LED_PIN_RIGHT // CW
+#define MOTOR_FR LED_PIN_DOWN  // CCW
+#define MOTOR_RL LED_PIN_UP    // CCW
+#define MOTOR_RR LED_PIN_LEFT  // CW
 
 // TODO rename LED_PIN to MOTOR positions
 
@@ -57,7 +57,14 @@ int main(){
   uint8_t threshold = 5;
 
   int16_t throttle = 0;
+  int16_t yaw = 0;
+  int16_t pwm_fl = 0;
+  int16_t pwm_fr = 0;
+  int16_t pwm_rl = 0;
+  int16_t pwm_rr = 0;
+
   uint8_t step_throttle = 10;
+  uint8_t step_yaw = 10;
 
   uint8_t IS_DEBUGGING = 0;
   
@@ -149,16 +156,36 @@ int main(){
 
       else{
         
-        if(y_left > threshold) throttle += step_throttle;
-        else if(y_left < -threshold) throttle -= step_throttle;
+        // Deadzone for joystick
+        if(abs(y_left) < threshold) y_left = 0;
+        if(abs(x_left) < threshold) x_left = 0;
+
+        // Left joystick (y-axis): Throttle 
+        throttle += (y_left > 0) ? step_throttle : (y_left < 0) ? -step_throttle : 0; 
 
         if(throttle > 255) throttle = 255;
         if(throttle < 0) throttle = 0;
 
-        pwm_set(LED_PIN_UP, throttle);
-        pwm_set(LED_PIN_DOWN, throttle);
-        pwm_set(LED_PIN_LEFT, throttle);
-        pwm_set(LED_PIN_RIGHT, throttle);
+        // Left joystick (x-axis): Yaw
+        yaw = (x_left > 0) ? step_yaw : (x_left < 0) ? -step_yaw : 0;
+
+        // Motor PWM calculation
+        pwm_fl = throttle + yaw;
+        pwm_rr = throttle + yaw;
+        pwm_fr = throttle - yaw;
+        pwm_rl = throttle - yaw;
+
+        // Clamping
+        if(pwm_fl > 255) pwm_fl = 255; if(pwm_fl < 0) pwm_fl = 0;
+        if(pwm_fr > 255) pwm_fr = 255; if(pwm_fr < 0) pwm_fr = 0;
+        if(pwm_rl > 255) pwm_rl = 255; if(pwm_rl < 0) pwm_rl = 0;
+        if(pwm_rr > 255) pwm_rr = 255; if(pwm_rr < 0) pwm_rr = 0;
+
+        // Apply PWM values to motors
+        pwm_set(MOTOR_FL, pwm_fl);
+        pwm_set(MOTOR_FR, pwm_fr);
+        pwm_set(MOTOR_RL, pwm_rl);
+        pwm_set(MOTOR_RR, pwm_rr);
       }
         
       // --------------------------------------------------------
