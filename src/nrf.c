@@ -109,12 +109,17 @@ void nrf_init(){
 }
 
 void nrf_config_rx(){
+    // Clear pending IRQs in NRF
+    nrf_write_register(NRF_REG_STATUS, 0x70); // clear RX_DR, TX_DS, MAX_RT
+
     nrf_write_register(NRF_REG_CONFIG, (NRF_CONFIG_RX) | (1 << NRF_EN_CRC) | (0 << NRF_CRC0));
      _delay_ms(5);
 
     // Configure interrupt pin PD2 on falling edge
     EICRA |= (1 << ISC01); 
     EIMSK |= (1 << INT0);
+
+    _delay_ms(100);
 }
 
 void nrf_config_tx(){
