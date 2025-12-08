@@ -14,7 +14,7 @@
 #include "shared.h"
 
 volatile uint8_t IS_NEW_DATA = 0;
-volatile  DualJoystickPacket joysticks;
+volatile DualJoystickPacket joysticks;
 
 ISR(INT0_vect){
   // Clear interrupt in NRF module
@@ -40,10 +40,6 @@ int main(){
   spi_init();
   nrf_init();
   nrf_config_rx();
-
-  // Configure interrupt pin PD2 on falling edge
-  EICRA |= (1 << ISC01); 
-  EIMSK |= (1 << INT0);
 
   // Enable global interrupts
   sei();
