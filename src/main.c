@@ -18,11 +18,42 @@
 #define MOTOR_RL LED_PIN_UP    // CCW
 #define MOTOR_RR LED_PIN_LEFT  // CW
 
+typedef struct {
+  float kp;
+  float ki;
+  float kd;
+
+  float error_prev;
+  float integral;
+} PID;
+
+
 // TODO rename LED_PIN to MOTOR positions
 
+
+// Global variables
 volatile uint8_t IS_NEW_DATA = 0;
 volatile DualJoystickPacket joysticks;
 
+PID pid_roll  = { .kp = 1.2, .ki = 0.0, .kd = 0.04 };
+PID pid_pitch = { .kp = 1.2, .ki = 0.0, .kd = 0.04 };
+PID pid_yaw   = { .kp = 2.0, .ki = 0.0, .kd = 0.0 };
+
+// PID controller
+float pid_compute(PID *pid, float desired, float measured, float dt){
+  float error = desired - measured;
+  pid->integral += error * dt;
+  
+  float derivative = (error - pid->error_prev) / dt;
+  float output = pid->kp * error + 
+                 pid->ki * pid->integral + 
+                 pid->kd * derivative;
+
+  pid->error_prev = error;
+  return output;
+}
+
+// Interrupts
 ISR(INT0_vect){
   // Clear interrupt in NRF module
   nrf_write_register(NRF_REG_STATUS, (1 << NRF_RX_DR));
@@ -70,7 +101,8 @@ int main(){
   uint8_t step_pitch = 10;
   uint8_t step_roll = 10;
 
-  uint8_t IS_ESC = 1;
+  uint8_t IS_DEBUGGING = 0;
+  uint8_t IS_PID = 0;
   
   while(1){
     if (IS_NEW_DATA) {
@@ -102,7 +134,7 @@ int main(){
 
       // --------------------------------------------------------
 
-      if(IS_ESC){
+      if(!IS_DEBUGGING){
 
         // Deadzone for joystick
         if(abs(y_left) < threshold) y_left = 0;
@@ -110,6 +142,9 @@ int main(){
         if(abs(y_right) < threshold) y_right = 0;
         if(abs(x_right) < threshold) x_right = 0;
 
+        // --------------------------------------------------------
+
+        // Joysticks - Desired behavior
         // Left joystick (y-axis): Throttle 
         throttle += (y_left > 0) ? step_throttle : (y_left < 0) ? -step_throttle : 0; 
 
@@ -125,12 +160,42 @@ int main(){
         // Righ joystick (x-axis):
         roll = (x_right > 0) ? step_roll : (x_right < 0) ? -step_roll : 0;
 
-        // Motor PWM calculation
-        pwm_fl = throttle + roll - pitch + yaw;
-        pwm_fr = throttle - roll - pitch - yaw;
-        pwm_rr = throttle - roll + pitch + yaw;
-        pwm_rl = throttle + roll + pitch - yaw;
+        // --------------------------------------------------------
 
+        // // IMU Sensor - Measured behavior
+        float sensor_roll  = 0.0f;
+        float sensor_pitch = 0.0f;
+        float sensor_yaw   = 0.0f;
+
+        // Example: simulate small drift
+        sensor_roll += 0.5;
+        sensor_pitch -= 0.2;
+
+        // --------------------------------------------------------
+
+        // PID controller
+        if(IS_PID){
+          float dt = 0.01;
+          float pid_roll_out = pid_compute(&pid_roll, roll, sensor_roll, dt);
+          float pid_pitch_out = pid_compute(&pid_pitch, pitch, sensor_pitch, dt);
+          float pid_yaw_out = pid_compute(&pid_yaw, yaw, sensor_yaw, dt);
+
+          pwm_fl = throttle + pid_roll_out - pid_pitch_out + pid_yaw_out;
+          pwm_fr = throttle - pid_roll_out - pid_pitch_out - pid_yaw_out;
+          pwm_rr = throttle - pid_roll_out + pid_pitch_out + pid_yaw_out;
+          pwm_rl = throttle + pid_roll_out + pid_pitch_out - pid_yaw_out;
+        }
+        
+        // --------------------------------------------------------
+
+        // Motor PWM calculation
+        else{
+          pwm_fl = throttle + roll - pitch + yaw;
+          pwm_fr = throttle - roll - pitch - yaw;
+          pwm_rr = throttle - roll + pitch + yaw;
+          pwm_rl = throttle + roll + pitch - yaw;
+        }
+        
         // Clamping
         if(pwm_fl > 255) pwm_fl = 255; if(pwm_fl < 0) pwm_fl = 0;
         if(pwm_fr > 255) pwm_fr = 255; if(pwm_fr < 0) pwm_fr = 0;
