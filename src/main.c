@@ -58,6 +58,8 @@ int main(){
 
   int16_t throttle = 0;
   int16_t yaw = 0;
+  int16_t pitch = 0;
+  int16_t roll = 0;
   int16_t pwm_fl = 0;
   int16_t pwm_fr = 0;
   int16_t pwm_rl = 0;
@@ -65,8 +67,10 @@ int main(){
 
   uint8_t step_throttle = 10;
   uint8_t step_yaw = 10;
+  uint8_t step_pitch = 10;
+  uint8_t step_roll = 10;
 
-  uint8_t IS_DEBUGGING = 0;
+  uint8_t IS_ESC = 1;
   
   while(1){
     if (IS_NEW_DATA) {
@@ -98,7 +102,52 @@ int main(){
 
       // --------------------------------------------------------
 
-      if(IS_DEBUGGING){
+      if(IS_ESC){
+
+        // Deadzone for joystick
+        if(abs(y_left) < threshold) y_left = 0;
+        if(abs(x_left) < threshold) x_left = 0;
+        if(abs(y_right) < threshold) y_right = 0;
+        if(abs(x_right) < threshold) x_right = 0;
+
+        // Left joystick (y-axis): Throttle 
+        throttle += (y_left > 0) ? step_throttle : (y_left < 0) ? -step_throttle : 0; 
+
+        if(throttle > 255) throttle = 255;
+        if(throttle < 0) throttle = 0;
+
+        // Left joystick (x-axis): Yaw
+        yaw = (x_left > 0) ? step_yaw : (x_left < 0) ? -step_yaw : 0;
+
+        // Righ joystick (y-axis):
+        pitch = (y_right > 0) ? step_pitch : (y_right < 0) ? -step_pitch : 0;
+
+        // Righ joystick (x-axis):
+        roll = (x_right > 0) ? step_roll : (x_right < 0) ? -step_roll : 0;
+
+        // Motor PWM calculation
+        pwm_fl = throttle + roll - pitch + yaw;
+        pwm_fr = throttle - roll - pitch - yaw;
+        pwm_rr = throttle - roll + pitch + yaw;
+        pwm_rl = throttle + roll + pitch - yaw;
+
+        // Clamping
+        if(pwm_fl > 255) pwm_fl = 255; if(pwm_fl < 0) pwm_fl = 0;
+        if(pwm_fr > 255) pwm_fr = 255; if(pwm_fr < 0) pwm_fr = 0;
+        if(pwm_rl > 255) pwm_rl = 255; if(pwm_rl < 0) pwm_rl = 0;
+        if(pwm_rr > 255) pwm_rr = 255; if(pwm_rr < 0) pwm_rr = 0;
+
+        // Apply PWM values to motors
+        pwm_set(MOTOR_FL, pwm_fl);
+        pwm_set(MOTOR_FR, pwm_fr);
+        pwm_set(MOTOR_RL, pwm_rl);
+        pwm_set(MOTOR_RR, pwm_rr);
+
+      }
+
+      // --------------------------------------------------------
+
+      else{
         x_right = -x_right;
         y_right = -y_right;
         x_left = -x_left;
@@ -150,42 +199,7 @@ int main(){
             pwm_set(LED_PIN_LEFT, left_value);
             pwm_set(LED_PIN_RIGHT, right_value);
         }
-      }
 
-      // --------------------------------------------------------
-
-      else{
-        
-        // Deadzone for joystick
-        if(abs(y_left) < threshold) y_left = 0;
-        if(abs(x_left) < threshold) x_left = 0;
-
-        // Left joystick (y-axis): Throttle 
-        throttle += (y_left > 0) ? step_throttle : (y_left < 0) ? -step_throttle : 0; 
-
-        if(throttle > 255) throttle = 255;
-        if(throttle < 0) throttle = 0;
-
-        // Left joystick (x-axis): Yaw
-        yaw = (x_left > 0) ? step_yaw : (x_left < 0) ? -step_yaw : 0;
-
-        // Motor PWM calculation
-        pwm_fl = throttle + yaw;
-        pwm_rr = throttle + yaw;
-        pwm_fr = throttle - yaw;
-        pwm_rl = throttle - yaw;
-
-        // Clamping
-        if(pwm_fl > 255) pwm_fl = 255; if(pwm_fl < 0) pwm_fl = 0;
-        if(pwm_fr > 255) pwm_fr = 255; if(pwm_fr < 0) pwm_fr = 0;
-        if(pwm_rl > 255) pwm_rl = 255; if(pwm_rl < 0) pwm_rl = 0;
-        if(pwm_rr > 255) pwm_rr = 255; if(pwm_rr < 0) pwm_rr = 0;
-
-        // Apply PWM values to motors
-        pwm_set(MOTOR_FL, pwm_fl);
-        pwm_set(MOTOR_FR, pwm_fr);
-        pwm_set(MOTOR_RL, pwm_rl);
-        pwm_set(MOTOR_RR, pwm_rr);
       }
         
       // --------------------------------------------------------
